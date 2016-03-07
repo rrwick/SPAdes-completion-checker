@@ -30,10 +30,10 @@ def get_arguments():
     parser.add_argument('graph', help='The assembly_graph.fastg file made by SPAdes')
     parser.add_argument('paths', help='A file containing one proposed graph path per line')
     parser.add_argument('kmer', type=int, help='The final (largest) kmer used in making this graph')
-    parser.add_argument('out', help='Output file prefix')
-    parser.add_argument('-d', '--depth', action='store', type=float, help='Read depth cutoff', default=1.0)
-    parser.add_argument('--min', action='store', type=float, help='Minimum acceptable ratio')
-    parser.add_argument('--max', action='store', type=float, help='Maximum acceptable ratio')
+    parser.add_argument('min', type=float, help='Minimum acceptable depth ratio')
+    parser.add_argument('max', type=float, help='Maximum acceptable depth ratio')
+    parser.add_argument('out', help='Prefix for output files')
+    parser.add_argument('--depth', action='store', type=float, help='Read depth cutoff', default=1.0)
 
     return parser.parse_args()
 
@@ -73,7 +73,7 @@ def determine_path_depths(paths, segments_dict, kmer):
 
 def output_path_depths(paths, output_prefix):
     out_file = open(output_prefix + '_path_depths.txt', 'w')
-    out_file.write('Path number\tEstimated depth\n')
+    out_file.write('Path number\tMedian depth\n')
     for i, path in enumerate(paths):
         out_file.write(str(i+1) + '\t' + str(path.depth) + '\n')
 
