@@ -21,7 +21,8 @@ def main():
     paths = load_paths(args.paths, segments_dict)
     determine_graph_segment_uniqueness(graph_segments, segments_dict, paths)
     determine_path_depths(paths, segments_dict, args.kmer)
-    output_expected_vs_actual(graph_segments, paths, args.depth, args.min, args.max)
+    output_path_depths(paths, args.out)
+    output_expected_vs_actual(graph_segments, paths, args.depth, args.min, args.max, args.out)
 
 
 def get_arguments():
@@ -29,6 +30,7 @@ def get_arguments():
     parser.add_argument('graph', help='The assembly_graph.fastg file made by SPAdes')
     parser.add_argument('paths', help='A file containing one proposed graph path per line')
     parser.add_argument('kmer', type=int, help='The final (largest) kmer used in making this graph')
+    parser.add_argument('out', help='Output file prefix')
     parser.add_argument('-d', '--depth', action='store', type=float, help='Read depth cutoff', default=1.0)
     parser.add_argument('--min', action='store', type=float, help='Minimum acceptable ratio')
     parser.add_argument('--max', action='store', type=float, help='Maximum acceptable ratio')
@@ -42,6 +44,10 @@ def load_graph(filename):
     for line in graph_file:
         if line.startswith('>'):
             graph_segments.append(GraphSegment(line))
+
+    # Make a segment 0 to use for path segments that aren't in the graph.
+    graph_segments.append(GraphSegment('EDGE_0_length_0_cov_0'))
+
     return graph_segments
 
 
@@ -64,38 +70,92 @@ def determine_path_depths(paths, segments_dict, kmer):
     for path in paths:
         path.determine_depth(segments_dict, kmer)
 
-def output_expected_vs_actual(graph_segments, paths, depth_cutoff, minimum, maximum):
 
-    print('Segment\t', end="")
-    print('\t'.join([str(x) for x in range(1, len(paths) + 1)]), end="")
-    print('\tExpected depth\tActual depth\tExpected/Actual')
+def output_path_depths(paths, output_prefix):
+    out_file = open(output_prefix + '_path_depths.txt', 'w')
+    out_file.write('Path number\tEstimated depth\n')
+    for i, path in enumerate(paths):
+        out_file.write(str(i+1) + '\t' + str(path.depth) + '\n')
+
+
+
+def output_expected_vs_actual(graph_segments, paths, depth_cutoff, minimum, maximum, output_prefix):
+
+    table_file = open(output_prefix + '_table.txt', 'w')
+    bandage_labels_file = open(output_prefix + '_bandage_labels.csv', 'w')
+
+    table_file.write('Segment\t')
+    table_file.write('\t'.join(['Path ' + str(x) + ' actual copies\tPath ' + str(x) + ' expected copies' for x in range(1, len(paths) + 1)]))
+    table_file.write('\tActual depth\tExpected depth\tActual depth / Expected depth\n')
+
+    bandage_labels_file.write('Segment,')
+    bandage_labels_file.write(','.join(['"Path ' + str(x) + ' copies: actual, expected"' for x in range(1, len(paths) + 1)]))
+    bandage_labels_file.write(',"Depth: actual, expected","Depth: actual/expected"\n')
 
     positive_graph_segments = [x for x in graph_segments if x.positive]
     positive_graph_segments = sorted(positive_graph_segments, key=lambda x: x.number)
+
+    shown_segments = []
 
     for segment in positive_graph_segments:
 
         actual_depth = segment.depth
         if actual_depth < depth_cutoff:
             continue
-        number_without_sign = segment.number
+
+        # Determine the segment's expected depth, based on the number of occurrences in each path.
         expected_depth = 0.0
         path_occurrences = []
         for path in paths:
-            occurrences = path.numbers_without_sign.count(number_without_sign)
+            occurrences = path.numbers_without_sign.count(segment.number)
             path_occurrences.append(occurrences)
             expected_depth += occurrences * path.depth
-        ratio = expected_depth / actual_depth
-
-        if minimum is not None or maximum is not None:
-            show = ratio < minimum or ratio > maximum
+        if expected_depth > 0.0:
+            ratio = actual_depth / expected_depth
         else:
-            show = True
+            ratio = '-'
 
-        if show:
-            print(str(number_without_sign) + '\t', end="")
-            print('\t'.join([str(x) for x in path_occurrences]), end="")
-            print('\t' + str(expected_depth) + '\t' + str(actual_depth) + '\t' + str(ratio))
+        # If the segment only occurs in one path, determine the expected copy number for that path.
+        only_one_path = path_occurrences.count(0) == len(paths) - 1
+        occurrence_match = False
+        if only_one_path:
+            expected_occurences = []
+            for i, path in enumerate(paths):
+                if segment.number in path.numbers_without_sign:
+                    expected_occurence = int(round(segment.depth / path.depth))
+                    expected_occurences.append(expected_occurence)
+                    occurrence_match = expected_occurence == path_occurrences[i]
+                else:
+                    expected_occurences.append('-')
+        else:
+            expected_occurences = ['-'] * len(paths)
+
+
+        output = True
+        if only_one_path and occurrence_match:
+            output = False
+        if ratio != '-' and minimum is not None or maximum is not None:
+            if ratio > minimum and ratio < maximum:
+                output = False
+
+        if output:
+            table_file.write(str(segment.number))
+            for i, occurrences in enumerate(path_occurrences):
+                table_file.write('\t' + str(occurrences) + '\t' + str(expected_occurences[i]))
+            table_file.write('\t' + str(actual_depth) + '\t' + str(expected_depth) + '\t' + str(ratio) + '\n')
+            shown_segments.append(str(segment.number))
+
+        bandage_labels_file.write(str(segment.number))
+        for i, occurrences in enumerate(path_occurrences):
+            bandage_labels_file.write(',"' + str(occurrences) + ', ' + str(expected_occurences[i]) + '"')
+        rounded_actual = "{0:.1f}".format(actual_depth)
+        rounded_expected = "{0:.1f}".format(expected_depth)
+        rounded_ratio = ratio
+        if ratio != '-':
+            rounded_ratio = "{0:.2f}".format(rounded_ratio)
+        bandage_labels_file.write(',"' + rounded_actual + ', ' + rounded_expected + '",' + rounded_ratio + '\n')
+
+    print(', '.join(shown_segments))
 
 
 
@@ -143,6 +203,16 @@ class ProposedPath:
         if len(path_string) == 0:
             raise Exception('Empty path')
         self.numbers_with_sign = path_string.split(',')
+
+        # If any of the segments aren't in the graph, change their number to 0.
+        fixed_numbers_with_sign = []
+        for number in self.numbers_with_sign:
+            if number in segments_dict:
+                fixed_numbers_with_sign.append(number)
+            else:
+                fixed_numbers_with_sign.append('0+')
+        self.numbers_with_sign = fixed_numbers_with_sign
+
         self.numbers_without_sign = [int(y.replace('-', '')) for y in [x.replace('+', '') for x in self.numbers_with_sign]]
         self.segments = [segments_dict[x] for x in self.numbers_with_sign]
         self.uniqueness = []
@@ -176,11 +246,14 @@ class ProposedPath:
                 depths.append(depth)
         sorted_depths = sorted(depths)
         depth_count = len(sorted_depths)
-        i = (depth_count - 1) // 2
-        if depth_count % 2:
-            self.depth = sorted_depths[i]
+        if depth_count == 0:
+            self.depth = 0.0
         else:
-            self.depth = (sorted_depths[i] + sorted_depths[i + 1]) / 2.0
+            i = (depth_count - 1) // 2
+            if depth_count % 2:
+                self.depth = sorted_depths[i]
+            else:
+                self.depth = (sorted_depths[i] + sorted_depths[i + 1]) / 2.0
 
 
 
