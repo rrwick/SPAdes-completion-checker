@@ -22,7 +22,7 @@ def main():
     determine_graph_segment_uniqueness(graph_segments, segments_dict, paths)
     determine_path_depths(paths, segments_dict, args.kmer)
     output_path_depths(paths, args.out)
-    output_expected_vs_actual(graph_segments, paths, args.depth, args.min, args.max, args.out)
+    output_table_and_bandage_labels(graph_segments, paths, args.depth, args.min, args.max, args.out)
 
 
 def get_arguments():
@@ -79,7 +79,7 @@ def output_path_depths(paths, output_prefix):
 
 
 
-def output_expected_vs_actual(graph_segments, paths, depth_cutoff, minimum, maximum, output_prefix):
+def output_table_and_bandage_labels(graph_segments, paths, depth_cutoff, minimum, maximum, output_prefix):
 
     table_file = open(output_prefix + '_table.txt', 'w')
     bandage_labels_file = open(output_prefix + '_bandage_labels.csv', 'w')
@@ -122,15 +122,15 @@ def output_expected_vs_actual(graph_segments, paths, depth_cutoff, minimum, maxi
             expected_occurences = []
             for i, path in enumerate(paths):
                 if segment.number in path.numbers_without_sign:
-                    expected_occurence = int(round(segment.depth / path.depth))
+                    expected_occurence = segment.depth / path.depth
                     expected_occurences.append(expected_occurence)
-                    occurrence_match = expected_occurence == path_occurrences[i]
+                    occurrence_match = int(round(expected_occurence)) == path_occurrences[i]
                 else:
                     expected_occurences.append('-')
         else:
             expected_occurences = ['-'] * len(paths)
 
-
+        # Decide whether or not to output to the table of results.
         output = True
         if only_one_path and occurrence_match:
             output = False
@@ -138,6 +138,7 @@ def output_expected_vs_actual(graph_segments, paths, depth_cutoff, minimum, maxi
             if ratio > minimum and ratio < maximum:
                 output = False
 
+        # Write the node to the results table, if appropriate.
         if output:
             table_file.write(str(segment.number))
             for i, occurrences in enumerate(path_occurrences):
@@ -145,15 +146,19 @@ def output_expected_vs_actual(graph_segments, paths, depth_cutoff, minimum, maxi
             table_file.write('\t' + str(actual_depth) + '\t' + str(expected_depth) + '\t' + str(ratio) + '\n')
             shown_segments.append(str(segment.number))
 
+        # All nodes are written into the Bandage labels file, regardless of whether they are in the results table.
         bandage_labels_file.write(str(segment.number))
         for i, occurrences in enumerate(path_occurrences):
-            bandage_labels_file.write(',"' + str(occurrences) + ', ' + str(expected_occurences[i]) + '"')
-        rounded_actual = "{0:.1f}".format(actual_depth)
-        rounded_expected = "{0:.1f}".format(expected_depth)
+            rounded_expected_occurence = expected_occurences[i]
+            if expected_occurences[i] != '-':
+                rounded_expected_occurence = "{0:.2f}".format(rounded_expected_occurence)
+            bandage_labels_file.write(',"' + str(occurrences) + ', ' + rounded_expected_occurence + '"')
+        rounded_actual_depth = "{0:.1f}".format(actual_depth)
+        rounded_expected_depth = "{0:.1f}".format(expected_depth)
         rounded_ratio = ratio
         if ratio != '-':
             rounded_ratio = "{0:.2f}".format(rounded_ratio)
-        bandage_labels_file.write(',"' + rounded_actual + ', ' + rounded_expected + '",' + rounded_ratio + '\n')
+        bandage_labels_file.write(',"' + rounded_actual_depth + ', ' + rounded_expected_depth + '",' + rounded_ratio + '\n')
 
     print(', '.join(shown_segments))
 
