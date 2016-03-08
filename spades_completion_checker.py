@@ -88,9 +88,9 @@ def output_table_and_bandage_labels(graph_segments, paths, depth_cutoff, minimum
     table_file.write('\t'.join(['Path ' + str(x) + ' actual copies\tPath ' + str(x) + ' expected copies' for x in range(1, len(paths) + 1)]))
     table_file.write('\tActual depth\tExpected depth\tActual depth / Expected depth\n')
 
-    bandage_labels_file.write('Segment,')
-    bandage_labels_file.write(','.join(['"Path ' + str(x) + ' copies: actual, expected"' for x in range(1, len(paths) + 1)]))
-    bandage_labels_file.write(',"Depth: actual, expected","Depth: actual/expected"\n')
+    bandage_labels_file.write('Segment\t')
+    bandage_labels_file.write('\t'.join(['Path ' + str(x) + ' copies: actual, expected' for x in range(1, len(paths) + 1)]))
+    bandage_labels_file.write('\tDepth: actual, expected\tDepth: actual/expected\tColour\n')
 
     positive_graph_segments = [x for x in graph_segments if x.positive]
     positive_graph_segments = sorted(positive_graph_segments, key=lambda x: x.number)
@@ -152,22 +152,42 @@ def output_table_and_bandage_labels(graph_segments, paths, depth_cutoff, minimum
             rounded_expected_occurence = expected_occurences[i]
             if expected_occurences[i] != '-':
                 rounded_expected_occurence = "{0:.2f}".format(rounded_expected_occurence)
-            bandage_labels_file.write(',"' + str(occurrences) + ', ' + rounded_expected_occurence + '"')
+            bandage_labels_file.write('\t' + str(occurrences) + ', ' + rounded_expected_occurence)
         rounded_actual_depth = "{0:.1f}".format(actual_depth)
         rounded_expected_depth = "{0:.1f}".format(expected_depth)
         rounded_ratio = ratio
         if ratio != '-':
             rounded_ratio = "{0:.2f}".format(rounded_ratio)
-        bandage_labels_file.write(',"' + rounded_actual_depth + ', ' + rounded_expected_depth + '",' + rounded_ratio + '\n')
+        bandage_labels_file.write('\t' + rounded_actual_depth + ', ' + rounded_expected_depth)
+        bandage_labels_file.write('\t' + rounded_ratio + '\t' + get_colour(ratio) + '\n')
 
     print(', '.join(shown_segments))
 
 
-
-
-
-
-
+def get_colour(ratio):
+    if ratio == '-':
+        red = 0
+        green = 0
+        blue = 0
+    elif ratio == 1.0:
+        red = 127
+        green = 127
+        blue = 127
+    elif ratio < 1.0:
+        blueness = 1.0 - ratio
+        red = int(127 - blueness * 127)
+        green = int(127 - blueness * 127)
+        blue = int(127 + blueness * 128)
+    elif ratio > 1.0:
+        redness = min((ratio - 1.0) / 2.0, 1.0)
+        red = int(127 + redness * 128)
+        green = int(127 - redness * 127)
+        blue = int(127 - redness * 127)
+    red = sorted([0, red, 255])[1]
+    green = sorted([0, green, 255])[1]
+    blue = sorted([0, blue, 255])[1]
+    colour_string = '#' + ("%0.2X" % red) + ("%0.2X" % green) + ("%0.2X" % blue)
+    return colour_string
 
 
 class GraphSegment:
