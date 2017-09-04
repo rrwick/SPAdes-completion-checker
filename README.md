@@ -1,3 +1,10 @@
+# This tool is deprecated!
+
+I have since written [Unicycler](https://github.com/rrwick/Unicycler) which does a good job of circularising genomes. I now use Unicycler instead of hybridSPAdes. If you still need to do this sort of thing, I'd recommend checking out [Circlator](https://sanger-pathogens.github.io/circlator/).
+
+If you're still interested, the original README follows below:
+
+
 # SPAdes Completion Checker
 
 This tool is intended to aid the user in getting completed bacterial genome sequences from a [hybrid](http://bioinformatics.oxfordjournals.org/content/early/2015/12/16/bioinformatics.btv688) [SPAdes](http://bioinf.spbau.ru/spades) assembly.
